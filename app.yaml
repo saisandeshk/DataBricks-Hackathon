@@ -1,0 +1,20 @@
+command: ["python", "app/main.py"]
+env:
+  - name: DATABRICKS_TOKEN
+    valueFrom: "secret/nyaya-sahayak/databricks-token"
+  - name: LLM_OPENAI_BASE_URL
+    value: "https://7474651922642032.ai-gateway.cloud.databricks.com/mlflow/v1"
+  - name: LLM_MODEL
+    value: "databricks-llama-4-maverick"
+  - name: LLM_TEMPERATURE
+    value: "0.2"
+  - name: FAISS_INDEX_DIR
+    value: "/Volumes/workspace/default/bharat_bricks_hacks/faiss_index"
+  - name: PARENT_STORE_DIR
+    value: "/Volumes/workspace/default/bharat_bricks_hacks/parent_store"
+  - name: SARVAM_API_KEY
+    valueFrom: "secret/nyaya-sahayak/sarvam-api-key"
+  - name: NYAYA_CATALOG
+    value: "workspace"
+  - name: NYAYA_SCHEMA
+    value: "default"

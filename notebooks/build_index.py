@@ -3,16 +3,16 @@
 # MAGIC # Build FAISS Index & Parent Store for Nyaya Sahayak
 # MAGIC
 # MAGIC **Prerequisites:**
-# MAGIC - Table `workspace.default.legal_rag_corpus` populated (or CSV files available)
-# MAGIC - Cluster with `sentence-transformers`, `faiss-cpu`, `langchain-community`, `langchain-huggingface`
+# MAGIC - Run `ingest_corpus.py` first → populates `workspace.default.legal_rag_corpus`
 # MAGIC
 # MAGIC **Outputs:**
-# MAGIC - FAISS index at `/Volumes/workspace/default/bharat_bricks_hacks/faiss_index/`
-# MAGIC - Parent store at `/Volumes/workspace/default/bharat_bricks_hacks/parent_store/`
+# MAGIC - FAISS index + Parent store at `/Volumes/workspace/default/bharat_bricks_hacks/nyaya_index/`
+# MAGIC
+# MAGIC Indexes **all** doc types: BNS, Constitution, SC judgments, IndicLegalQA, legal PDFs.
 
 # COMMAND ----------
 
-# MAGIC %pip install -q faiss-cpu>=1.7 sentence-transformers>=2.2 langchain-community langchain-huggingface numpy"<2" tiktoken
+# MAGIC %pip install -q "faiss-cpu>=1.7,<2" "sentence-transformers>=2.2,<4" "langchain-community>=0.3,<0.4" "langchain-huggingface>=0.1,<0.2" "langchain-text-splitters>=0.3,<0.4" "numpy<2" tiktoken
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -85,7 +85,7 @@ display(pdf.head(3))
 
 # COMMAND ----------
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 child_splitter = RecursiveCharacterTextSplitter(
     chunk_size=CHILD_CHUNK_SIZE,
@@ -170,12 +170,24 @@ print(f"✅ FAISS index saved to {FAISS_DIR} ({len(docs)} vectors)")
 # COMMAND ----------
 
 store2 = FAISS.load_local(FAISS_DIR, embeddings, allow_dangerous_deserialization=True)
-results = store2.similarity_search("What is theft under BNS?", k=5)
-for i, doc in enumerate(results, 1):
-    print(f"\n--- Result {i} ---")
-    print(f"Source: {doc.metadata.get('source', '?')}")
-    print(f"Parent: {doc.metadata.get('parent_id', '?')}")
-    print(f"Text: {doc.page_content[:200]}…")
+
+# Test queries across all doc types
+test_queries = [
+    ("What is theft under BNS?", "BNS"),
+    ("fundamental rights constitution", "Constitution"),
+    ("supreme court right to privacy", "SC Judgment"),
+    ("what is bail procedure", "General"),
+]
+
+for query, label in test_queries:
+    print(f"\n{'='*60}")
+    print(f"Query [{label}]: {query}")
+    print(f"{'='*60}")
+    results = store2.similarity_search(query, k=3)
+    for i, doc in enumerate(results, 1):
+        print(f"  Result {i}: [{doc.metadata.get('doc_type','?')}] {doc.metadata.get('source','?')[:50]}")
+        print(f"    Parent: {doc.metadata.get('parent_id','?')}")
+        print(f"    Text: {doc.page_content[:150]}…")
 
 # COMMAND ----------
 

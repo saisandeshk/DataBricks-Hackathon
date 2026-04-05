@@ -29,8 +29,8 @@ TABLE = "legal_rag_corpus"
 VOLUME = "bharat_bricks_hacks"
 
 VOL_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}"
-FAISS_DIR = f"{VOL_PATH}/faiss_index"
-PARENT_DIR = f"{VOL_PATH}/parent_store"
+FAISS_DIR = f"{VOL_PATH}/nyaya_index"
+PARENT_DIR = f"{VOL_PATH}/nyaya_index"
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 CHILD_CHUNK_SIZE = 500

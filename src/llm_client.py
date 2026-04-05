@@ -1,7 +1,7 @@
-"""Databricks-compatible LLM client — wraps AI Gateway / PAT / OAuth M2M.
+"""LLM client — wraps Sarvam AI / Databricks AI Gateway / any OpenAI-compatible endpoint.
 
 Provides both raw `chat_completions()` for the old pipeline AND a
-LangChain-compatible `ChatDatabricks` wrapper for LangGraph nodes.
+LangChain-compatible `ChatOpenAI` wrapper for LangGraph nodes.
 """
 from __future__ import annotations
 
@@ -38,7 +38,8 @@ def _chat_url() -> str:
 
 def _bearer() -> str:
     token = (
-        os.environ.get("DATABRICKS_TOKEN", "").strip()
+        os.environ.get("SARVAM_API_KEY", "").strip()
+        or os.environ.get("DATABRICKS_TOKEN", "").strip()
         or os.environ.get("LLM_API_KEY", "").strip()
         or os.environ.get("OPENAI_API_KEY", "").strip()
     )
@@ -81,8 +82,8 @@ def chat_completions(
     url = _chat_url()
     token = _bearer()
     if not token:
-        raise RuntimeError("Set DATABRICKS_TOKEN, LLM_API_KEY, or OPENAI_API_KEY.")
-    model = (model or os.environ.get("LLM_MODEL", "")).strip()
+        raise RuntimeError("Set SARVAM_API_KEY, DATABRICKS_TOKEN, LLM_API_KEY, or OPENAI_API_KEY.")
+    model = (model or os.environ.get("LLM_MODEL", "sarvam-m")).strip()
     if not model:
         raise RuntimeError("Set LLM_MODEL.")
     r = requests.post(
@@ -103,21 +104,21 @@ def extract_assistant_text(response: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# LangChain ChatOpenAI wrapper pointing at Databricks AI Gateway
+# LangChain ChatOpenAI wrapper pointing at Sarvam AI / any OpenAI-compat API
 # ---------------------------------------------------------------------------
 
 def get_langchain_llm(temperature: float | None = None, max_tokens: int = 3072):
-    """Return a LangChain ChatOpenAI configured for the Databricks AI Gateway.
+    """Return a LangChain ChatOpenAI configured for Sarvam AI (or any OpenAI-compatible endpoint).
 
     Works with tool_calling, structured output, and streaming.
     """
     from langchain_openai import ChatOpenAI
 
-    base = os.environ.get("LLM_OPENAI_BASE_URL", "").strip().rstrip("/")
-    model = os.environ.get("LLM_MODEL", "databricks-llama-4-maverick").strip()
+    base = os.environ.get("LLM_OPENAI_BASE_URL", "https://api.sarvam.ai/v1").strip().rstrip("/")
+    model = os.environ.get("LLM_MODEL", "sarvam-m").strip()
     token = _bearer()
     if not token:
-        raise RuntimeError("Set DATABRICKS_TOKEN, LLM_API_KEY, or OPENAI_API_KEY.")
+        raise RuntimeError("Set SARVAM_API_KEY, DATABRICKS_TOKEN, LLM_API_KEY, or OPENAI_API_KEY.")
     if not base:
         raise RuntimeError("Set LLM_OPENAI_BASE_URL.")
 

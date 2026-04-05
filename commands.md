@@ -3,13 +3,19 @@
 ## Architecture
 
 ```
+                        ┌─────────────────────────┐
+   Legal PDFs ────────→ │ pymupdf4llm (PDF → MD)  │
+   BNS CSV ───────────→ │ Ingestion Notebook       │ → Delta Table → FAISS + Parent Store
+   IndicLegalQA JSON ─→ │ MarkdownHeaderSplitter   │
+                        └─────────────────────────┘
+
 User → Gradio UI (voice + text + 13 languages)
         ↓
     LangGraph Agent (query rewrite → orchestrator → tools → compress → aggregate)
         ↓
     FAISS Index (child chunks) + Parent Store (full sections)
         ↓
-    Databricks AI Gateway (Llama 4 Maverick)
+    Sarvam AI (sarvam-m model, OpenAI-compatible)
 ```
 
 **Data flow:**
@@ -25,7 +31,7 @@ User → Gradio UI (voice + text + 13 languages)
 
 - Databricks workspace (Free Edition works)
 - Python 3.10+
-- Sarvam AI API key (free tier at https://sarvam.ai — for voice/translation)
+- Sarvam AI API key (free tier at https://sarvam.ai — used for LLM + voice + translation)
 
 ---
 
@@ -49,16 +55,25 @@ CREATE VOLUME IF NOT EXISTS workspace.default.bharat_bricks_hacks;
 
 ---
 
-## Step 3: Upload BNS Dataset
+## Step 3: Upload Datasets
 
-1. Download `bns_sections.csv` from the `datasets/BNS/` folder in this repo
-2. In Databricks: **Catalog → workspace → default → bharat_bricks_hacks**
-3. Click **Upload to Volume** → upload `bns_sections.csv`
+**Required:**
+1. Upload `datasets/BNS/bns_sections.csv` to the Volume
+   - In Databricks: **Catalog → workspace → default → bharat_bricks_hacks**
+   - Click **Upload to Volume** → upload `bns_sections.csv`
 
-Optional (for richer corpus):
-- Upload `constitution_articles.csv` (Constitution of India articles)
-- Upload `sc_judgments.csv` (Supreme Court judgment excerpts)
-- Upload `indiclegalqa.csv` (IndicLegalQA dataset)
+**Legal PDFs (Constitution, SC Judgments, etc.):**
+2. Create a `pdfs/` subfolder in the Volume
+3. Upload any legal PDF files to `pdfs/`:
+   - Constitution of India PDF
+   - Supreme Court judgment compilations
+   - BNS gazette PDF
+   - Any other legal documents
+   - The ingestion notebook will automatically convert them to Markdown and chunk them
+
+**Recommended (for richer corpus):**
+4. Upload `datasets/IndicLegalQA Dataset_10K_Revised.json` to the same Volume
+   - This adds ~10,000 Supreme Court QA pairs to the corpus
 
 ---
 
@@ -68,34 +83,19 @@ Optional (for richer corpus):
 # In Databricks CLI (or notebook with %sh)
 databricks secrets create-scope nyaya-sahayak
 
-# Databricks PAT token
-databricks secrets put-secret nyaya-sahayak databricks-token
-
-# Sarvam API key (optional — for voice/translation)
+# Sarvam API key (used for LLM, voice, translation — all in one key)
 databricks secrets put-secret nyaya-sahayak sarvam-api-key
 ```
 
 **Alternative (environment variables in notebook):**
 ```python
 import os
-os.environ["DATABRICKS_TOKEN"] = dbutils.secrets.get("nyaya-sahayak", "databricks-token")
 os.environ["SARVAM_API_KEY"] = dbutils.secrets.get("nyaya-sahayak", "sarvam-api-key")
 ```
 
 ---
 
-## Step 5: Set Up AI Gateway
-
-1. In Databricks: **Serving → AI Gateway → Create endpoint**
-2. Or use an existing endpoint. Note the base URL:
-   ```
-   https://<workspace-id>.ai-gateway.cloud.databricks.com/mlflow/v1
-   ```
-3. Ensure the model `databricks-llama-4-maverick` is available
-
----
-
-## Step 6: Run Ingestion Notebook
+## Step 5: Run Ingestion Notebook
 
 1. Import `notebooks/ingest_corpus.py` into your Databricks workspace
 2. Attach to a cluster (any size — single node works)
@@ -105,13 +105,17 @@ os.environ["SARVAM_API_KEY"] = dbutils.secrets.get("nyaya-sahayak", "sarvam-api-
 **Expected output:**
 ```
 BNS: 358 sections
-Total corpus: 358+ chunks (more with Constitution/SC/IndicLegalQA)
+Found N PDF(s) in /Volumes/.../pdfs
+📄 Processing: constitution_of_india.pdf → X parent chunks, Y child chunks
+📄 Processing: sc_judgments.pdf → X parent chunks, Y child chunks
+IndicLegalQA: ~X case summaries + ~10000 individual QA chunks
+Total corpus: 10000+ chunks
 ✅ Saved to workspace.default.legal_rag_corpus
 ```
 
 ---
 
-## Step 7: Build FAISS Index
+## Step 6: Build FAISS Index
 
 1. Import `notebooks/build_index.py` into your Databricks workspace
 2. Attach to a cluster with ≥4GB RAM
@@ -121,13 +125,13 @@ Total corpus: 358+ chunks (more with Constitution/SC/IndicLegalQA)
 ```
 Parents: 358+
 Children: 1000+ (depends on chunk splitting)
-✅ FAISS index saved to /Volumes/workspace/default/bharat_bricks_hacks/faiss_index/
-✅ Parent store saved to /Volumes/workspace/default/bharat_bricks_hacks/parent_store/
+✅ FAISS index saved to /Volumes/workspace/default/bharat_bricks_hacks/nyaya_index/
+✅ Parent store saved to /Volumes/workspace/default/bharat_bricks_hacks/nyaya_index/
 ```
 
 ---
 
-## Step 8: Deploy as Databricks App
+## Step 7: Deploy as Databricks App
 
 ### Option A: Databricks Apps (recommended)
 
@@ -145,10 +149,9 @@ Children: 1000+ (depends on chunk splitting)
 4. The app will install dependencies from `requirements.txt` and start
 
 5. Environment variables from `app.yaml`:
-   - `DATABRICKS_TOKEN` — from secret scope
-   - `LLM_OPENAI_BASE_URL` — your AI Gateway URL
-   - `LLM_MODEL` — `databricks-llama-4-maverick`
-   - `SARVAM_API_KEY` — from secret scope
+   - `SARVAM_API_KEY` — from secret scope (used for LLM + voice + translation)
+   - `LLM_OPENAI_BASE_URL` — `https://api.sarvam.ai/v1`
+   - `LLM_MODEL` — `sarvam-m`
    - `FAISS_INDEX_DIR` — Volume path for FAISS index
    - `PARENT_STORE_DIR` — Volume path for parent chunks
 
@@ -158,12 +161,11 @@ Children: 1000+ (depends on chunk splitting)
 # In a Databricks notebook cell:
 import os, sys
 
-os.environ["DATABRICKS_TOKEN"] = dbutils.secrets.get("nyaya-sahayak", "databricks-token")
-os.environ["LLM_OPENAI_BASE_URL"] = "https://<workspace-id>.ai-gateway.cloud.databricks.com/mlflow/v1"
-os.environ["LLM_MODEL"] = "databricks-llama-4-maverick"
 os.environ["SARVAM_API_KEY"] = dbutils.secrets.get("nyaya-sahayak", "sarvam-api-key")
-os.environ["FAISS_INDEX_DIR"] = "/Volumes/workspace/default/bharat_bricks_hacks/faiss_index"
-os.environ["PARENT_STORE_DIR"] = "/Volumes/workspace/default/bharat_bricks_hacks/parent_store"
+os.environ["LLM_OPENAI_BASE_URL"] = "https://api.sarvam.ai/v1"
+os.environ["LLM_MODEL"] = "sarvam-m"
+os.environ["FAISS_INDEX_DIR"] = "/Volumes/workspace/default/bharat_bricks_hacks/nyaya_index"
+os.environ["PARENT_STORE_DIR"] = "/Volumes/workspace/default/bharat_bricks_hacks/nyaya_index"
 
 # Add project to path
 REPO_ROOT = "/Workspace/Users/<your-email>/nyaya-sahayak"
@@ -179,11 +181,14 @@ demo.launch(share=True)
 ```bash
 cd project/
 
-# Set environment variables
-export DATABRICKS_TOKEN="dapi..."
-export LLM_OPENAI_BASE_URL="https://<workspace-id>.ai-gateway.cloud.databricks.com/mlflow/v1"
-export LLM_MODEL="databricks-llama-4-maverick"
+# Option 1: Edit .env file (recommended)
+cp .env .env.local
+# Edit .env.local — set SARVAM_API_KEY and paths
+
+# Option 2: Export vars manually
 export SARVAM_API_KEY="your-sarvam-key"
+export LLM_OPENAI_BASE_URL="https://api.sarvam.ai/v1"
+export LLM_MODEL="sarvam-m"
 export FAISS_INDEX_DIR="./faiss_index"      # copy from Volume
 export PARENT_STORE_DIR="./parent_store"    # copy from Volume
 
@@ -193,7 +198,7 @@ python app/main.py
 
 ---
 
-## Step 9: Verify
+## Step 8: Verify
 
 1. Open the app URL (shown after deployment)
 2. Try these test queries:
@@ -211,15 +216,17 @@ python app/main.py
 project/
 ├── app.yaml                 # Databricks Apps config
 ├── requirements.txt         # Python dependencies
+├── .env                     # Local env vars (edit with your keys)
 ├── commands.md              # This file
 ├── app/
 │   ├── __init__.py
-│   └── main.py              # Entry point
+│   └── main.py              # Entry point (loads .env)
 ├── src/
 │   ├── __init__.py
 │   ├── config.py            # All configuration constants
-│   ├── llm_client.py        # Databricks AI Gateway wrapper
+│   ├── llm_client.py        # Sarvam AI / OpenAI-compatible wrapper
 │   ├── sarvam_client.py     # Sarvam STT/TTS/Translation
+│   ├── document_processor.py # PDF → Markdown → Parent/Child chunks
 │   ├── embedder.py          # SentenceTransformer wrapper
 │   ├── query_logger.py      # Delta Lake / CSV logging
 │   ├── utils.py             # Token estimation utilities
@@ -240,7 +247,7 @@ project/
 │   └── ui/
 │       └── gradio_app.py    # Full Gradio UI with voice
 └── notebooks/
-    ├── ingest_corpus.py     # BNS + Constitution + SC → Delta table
+    ├── ingest_corpus.py     # BNS CSV + Legal PDFs + IndicLegalQA → Delta table
     └── build_index.py       # Delta → FAISS index + parent store
 ```
 
@@ -286,10 +293,10 @@ START → orchestrator → [tools | fallback_response | collect_answer]
 
 | Issue | Solution |
 |-------|----------|
-| `DATABRICKS_TOKEN not set` | Set via env var or Databricks secret scope |
+| `SARVAM_API_KEY not set` | Set in `.env` file, env var, or Databricks secret scope |
 | `FAISS index not found` | Run `build_index.py` notebook first |
-| `LLM returns empty` | Check AI Gateway URL and model availability |
-| `Sarvam voice not working` | Verify SARVAM_API_KEY is set and valid |
+| `LLM returns empty` | Check SARVAM_API_KEY is valid at https://dashboard.sarvam.ai |
+| `Sarvam voice not working` | Same key is used for LLM + voice — verify it's valid |
 | `Import errors` | Run `pip install -r requirements.txt` |
 | `Out of memory` | Use a cluster with ≥4GB RAM for index building |
-| `structured_output fails` | Ensure LLM supports tool_calling (Llama 4 Maverick does) |
+| `structured_output fails` | Ensure LLM supports tool_calling (sarvam-m does) |

@@ -4,6 +4,7 @@ langchain>=0.3,<0.4
 langchain-openai>=0.3,<0.4
 langchain-community>=0.3,<0.4
 langchain-huggingface>=0.1,<0.2
+langchain-text-splitters>=0.3,<0.4
 langgraph>=0.4,<0.5
 faiss-cpu>=1.7,<2
 sentence-transformers>=2.2,<4
@@ -11,6 +12,11 @@ numpy<2
 requests>=2.28
 pydantic>=2,<3
 tiktoken>=0.5
+python-dotenv>=1.0
+
+# PDF processing (pymupdf4llm for PDF → Markdown)
+pymupdf>=1.24
+pymupdf4llm>=0.0.17
 
 # Databricks
 databricks-sdk>=0.20

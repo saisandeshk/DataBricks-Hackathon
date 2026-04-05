@@ -5,13 +5,13 @@ Reads env vars at import time. All knobs in one file.
 import os
 
 # ---------------------------------------------------------------------------
-# Databricks LLM (AI Gateway → Llama Maverick)
+# LLM — Sarvam AI (OpenAI-compatible endpoint)
 # ---------------------------------------------------------------------------
 LLM_OPENAI_BASE_URL = os.environ.get(
     "LLM_OPENAI_BASE_URL",
-    "https://7474651922642032.ai-gateway.cloud.databricks.com/mlflow/v1",
+    "https://api.sarvam.ai/v1",
 ).strip()
-LLM_MODEL = os.environ.get("LLM_MODEL", "databricks-llama-4-maverick").strip()
+LLM_MODEL = os.environ.get("LLM_MODEL", "sarvam-m").strip()
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.2"))
 
 # ---------------------------------------------------------------------------
@@ -55,6 +55,23 @@ TOKEN_GROWTH_FACTOR = float(os.environ.get("AGENT_TOKEN_GROWTH", "0.9"))
 SEARCH_K = int(os.environ.get("SEARCH_K", "10"))
 CHILD_CHUNK_SIZE = int(os.environ.get("CHILD_CHUNK_SIZE", "500"))
 CHILD_CHUNK_OVERLAP = int(os.environ.get("CHILD_CHUNK_OVERLAP", "100"))
+MIN_PARENT_SIZE = int(os.environ.get("MIN_PARENT_SIZE", "2000"))
+MAX_PARENT_SIZE = int(os.environ.get("MAX_PARENT_SIZE", "4000"))
+
+# ---------------------------------------------------------------------------
+# Document Processing (PDF → Markdown → Chunks)
+# ---------------------------------------------------------------------------
+MARKDOWN_DIR = os.environ.get(
+    "MARKDOWN_DIR", f"{VOL_PATH}/markdown_docs"
+).strip()
+PDF_DIR = os.environ.get(
+    "PDF_DIR", f"{VOL_PATH}/pdfs"
+).strip()
+HEADERS_TO_SPLIT_ON = [
+    ("#", "H1"),
+    ("##", "H2"),
+    ("###", "H3"),
+]
 
 # ---------------------------------------------------------------------------
 # Sarvam AI (voice / translation)

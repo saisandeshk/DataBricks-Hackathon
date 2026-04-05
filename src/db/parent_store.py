@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_STORE = os.environ.get(
     "PARENT_STORE_DIR",
-    "/Volumes/workspace/default/bharat_bricks_hacks/parent_store",
+    "/Volumes/workspace/default/bharat_bricks_hacks/nyaya_index",
 )
-_LOCAL_CACHE = os.environ.get("PARENT_STORE_LOCAL", "/tmp/parent_store")
+_LOCAL_CACHE = os.environ.get("PARENT_STORE_LOCAL", "/tmp/nyaya_index")
 
 
 class ParentStoreManager:
@@ -31,17 +31,11 @@ class ParentStoreManager:
     # ── helpers ───────────────────────────────────────────────────────────
 
     def _ensure_local(self) -> Path:
-        """If store is on a read-only Volume, mirror to a local cache."""
+        """If store is on a UC Volume, download to local cache via SDK."""
+        from src.db.volume_download import download_volume_dir
+
         local = Path(_LOCAL_CACHE)
-        if self._store_path == local or not self._store_path.exists():
-            local.mkdir(parents=True, exist_ok=True)
-            return local
-        if not local.exists() or not any(local.iterdir()):
-            import shutil
-            local.mkdir(parents=True, exist_ok=True)
-            for f in self._store_path.iterdir():
-                shutil.copy2(f, local / f.name)
-        return local
+        return download_volume_dir(str(self._store_path), str(local))
 
     @staticmethod
     def _sort_key(id_str: str) -> int:

@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 # Default paths — overridden by env / config at runtime
 _DEFAULT_INDEX_DIR = os.environ.get(
     "FAISS_INDEX_DIR",
-    "/Volumes/workspace/default/bharat_bricks_hacks/faiss_index",
+    "/Volumes/workspace/default/bharat_bricks_hacks/nyaya_index",
 )
-_LOCAL_CACHE = os.environ.get("FAISS_LOCAL_CACHE", "/tmp/faiss_index")
+_LOCAL_CACHE = os.environ.get("FAISS_LOCAL_CACHE", "/tmp/nyaya_index")
 
 
 class FaissManager:
@@ -74,21 +74,17 @@ class FaissManager:
     def load(self, index_dir: str | None = None) -> None:
         """Load a persisted FAISS index."""
         from langchain_community.vectorstores import FAISS
+        from src.db.volume_download import download_volume_dir
 
         src = index_dir or self._index_dir
-        # On Databricks Apps the Volume is read-only; copy to local cache
-        local = _LOCAL_CACHE
-        if src != local and Path(src).exists():
-            import shutil
-            Path(local).mkdir(parents=True, exist_ok=True)
-            for f in Path(src).iterdir():
-                shutil.copy2(f, Path(local) / f.name)
-            src = local
+        # Download from UC Volume if direct path isn't available
+        local = Path(_LOCAL_CACHE)
+        load_path = str(download_volume_dir(src, str(local)))
 
         self._store = FAISS.load_local(
-            src, self._get_embeddings(), allow_dangerous_deserialization=True,
+            load_path, self._get_embeddings(), allow_dangerous_deserialization=True,
         )
-        logger.info("FAISS index loaded from %s", src)
+        logger.info("FAISS index loaded from %s", load_path)
 
     # ── Query ────────────────────────────────────────────────────────────
 

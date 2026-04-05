@@ -26,7 +26,7 @@ EMBEDDING_DIM = 384
 # FAISS index (built from Delta table, stored in UC Volume)
 # ---------------------------------------------------------------------------
 FAISS_INDEX_DIR = os.environ.get(
-    "NYAYA_INDEX_DIR",
+    "FAISS_INDEX_DIR",
     "/Volumes/workspace/default/bharat_bricks_hacks/nyaya_index",
 ).strip()
 LOCAL_INDEX_CACHE = "/tmp/nyaya_index"

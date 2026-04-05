@@ -58,7 +58,7 @@ except Exception as e:
     # Fallback: load BNS sections CSV
     csv_path = f"{VOL_PATH}/bns_sections.csv"
     if not os.path.exists(csv_path):
-        csv_path = "/Workspace/datasets/BNS/bns_sections.csv"
+        csv_path = "/Volumes/workspace/default/bharat_bricks_hacks/bns_sections.csv"
     df_bns = pd.read_csv(csv_path)
     rows = []
     for _, r in df_bns.iterrows():
@@ -130,12 +130,21 @@ print(f"Children: {len(child_chunks)}")
 
 # COMMAND ----------
 
-saved = 0
-for parent_id, content, metadata in parent_chunks:
+from concurrent.futures import ThreadPoolExecutor
+
+def save_one(args):
+    parent_id, content, metadata = args
     fp = os.path.join(PARENT_DIR, f"{parent_id}.json")
     with open(fp, "w", encoding="utf-8") as f:
-        json.dump({"page_content": content, "metadata": metadata}, f, ensure_ascii=False, indent=2)
-    saved += 1
+        json.dump(
+            {"page_content": content, "metadata": metadata},
+            f,
+            ensure_ascii=False  # no indent
+        )
+    return 1
+
+with ThreadPoolExecutor(max_workers=16) as ex:
+    saved = sum(ex.map(save_one, parent_chunks))
 
 print(f"✅ Saved {saved} parent chunks to {PARENT_DIR}")
 
@@ -152,15 +161,44 @@ from langchain_community.vectorstores import FAISS
 
 embeddings = HuggingFaceEmbeddings(
     model_name=EMBED_MODEL,
-    encode_kwargs={"normalize_embeddings": True},
+    encode_kwargs={"normalize_embeddings": True, 
+                   "batch_size": 128},
 )
 
-docs = [Document(page_content=t, metadata=m) for t, m in child_chunks]
-print(f"Embedding {len(docs)} child chunks …")
+# docs = [Document(page_content=t, metadata=m) for t, m in child_chunks]
+# print(f"Embedding {len(docs)} child chunks …")
 
-store = FAISS.from_documents(docs, embeddings)
-store.save_local(FAISS_DIR)
-print(f"✅ FAISS index saved to {FAISS_DIR} ({len(docs)} vectors)")
+# import time
+# start = time.time()
+
+# store = FAISS.from_documents(docs, embeddings)
+
+# print("Time:", time.time() - start)
+# store.save_local(FAISS_DIR)
+# print(f"✅ FAISS index saved to {FAISS_DIR} ({len(docs)} vectors)")
+
+store = FAISS.load_local(
+    FAISS_DIR,
+    embeddings,
+    allow_dangerous_deserialization=True
+)
+
+# COMMAND ----------
+
+# import json
+
+# CHILD_EXPORT_PATH = "/Volumes/workspace/default/bharat_bricks_hacks/child_chunks.json"
+
+# with open(CHILD_EXPORT_PATH, "w", encoding="utf-8") as f:
+#     json.dump(child_chunks, f, ensure_ascii=False)
+
+# print("Saved to:", CHILD_EXPORT_PATH)
+
+# COMMAND ----------
+
+import os
+print("\nInside faiss_index folder:")
+print(os.listdir(f"{FAISS_DIR}/faiss_index"))
 
 # COMMAND ----------
 
@@ -169,7 +207,11 @@ print(f"✅ FAISS index saved to {FAISS_DIR} ({len(docs)} vectors)")
 
 # COMMAND ----------
 
-store2 = FAISS.load_local(FAISS_DIR, embeddings, allow_dangerous_deserialization=True)
+store2 = FAISS.load_local(
+    FAISS_DIR,
+    embeddings,
+    allow_dangerous_deserialization=True
+)
 
 # Test queries across all doc types
 test_queries = [

@@ -6,7 +6,7 @@ import traceback
 
 import gradio as gr
 
-from src.config import LANGUAGES, UI_TO_BCP47
+from src.config import SARVAM_LANGUAGES, UI_TO_BCP47
 from src.core.chat_interface import ChatInterface
 from src.core.rag_system import RAGSystem
 from src import sarvam_client
@@ -37,7 +37,7 @@ def _tts(text: str, lang: str):
 
 def _translate_if_needed(text: str, lang: str, direction: str = "to_en") -> str:
     """Translate text via Sarvam Mayura if language is not English."""
-    if lang == "English" or not sarvam_client.is_configured():
+    if lang == "en" or not sarvam_client.is_configured():
         return text
     bcp = UI_TO_BCP47.get(lang, "en-IN")
     if direction == "to_en":
@@ -59,7 +59,7 @@ def create_gradio_ui() -> gr.Blocks:
             return ""
         try:
             transcript = _stt(audio)
-            if lang != "English" and sarvam_client.is_configured():
+            if lang != "en" and sarvam_client.is_configured():
                 return transcript  # STT mode=translate already gives English
             return transcript
         except Exception:
@@ -81,7 +81,7 @@ def create_gradio_ui() -> gr.Blocks:
             for chunk in chat_interface.chat(query_en, history):
                 if isinstance(chunk, str):
                     final_text = chunk
-                    display = _translate_if_needed(chunk, lang, "from_en") if lang != "English" else chunk
+                    display = _translate_if_needed(chunk, lang, "from_en") if lang != "en" else chunk
                     yield history + [{"role": "assistant", "content": display}]
                 elif isinstance(chunk, list) and chunk:
                     last_plain = next(
@@ -94,7 +94,7 @@ def create_gradio_ui() -> gr.Blocks:
                     for m in chunk:
                         if "metadata" not in m:
                             content = m["content"]
-                            if lang != "English" and m.get("role") == "assistant" and len(content) > 20:
+                            if lang != "en" and m.get("role") == "assistant" and len(content) > 20:
                                 try:
                                     content = _translate_if_needed(content, lang, "from_en")
                                 except Exception:
@@ -130,7 +130,7 @@ def create_gradio_ui() -> gr.Blocks:
         try:
             bcp = UI_TO_BCP47.get(lang, "en-IN")
             text_for_tts = last_assistant
-            if lang != "English":
+            if lang != "en":
                 try:
                     text_for_tts = _translate_if_needed(last_assistant, lang, "from_en")
                 except Exception:
@@ -155,7 +155,7 @@ def create_gradio_ui() -> gr.Blocks:
 
         with gr.Row():
             lang_dd = gr.Dropdown(
-                choices=LANGUAGES, value="English", label="Language", scale=1,
+                choices=SARVAM_LANGUAGES, value="en", label="Language", scale=1,
             )
 
         chatbot = gr.Chatbot(
